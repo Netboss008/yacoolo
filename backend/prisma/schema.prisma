@@ -1,0 +1,282 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  username      String    @unique
+  password      String
+  avatar        String?
+  bio           String?
+  isStreamer    Boolean   @default(false)
+  stars         Int       @default(0)
+  followers     Follow[]  @relation("Following")
+  following     Follow[]  @relation("Followers")
+  streams       Stream[]
+  guestStreams  Guest[]
+  chatMessages  ChatMessage[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  firstName     String?
+  teams         TeamMember[]
+  hostedTeams   Team[]      @relation("TeamHost")
+  adminInterventions AdminIntervention[] @relation("AdminInterventions")
+  teamRoomParticipations TeamRoomParticipant[]
+  teleprompterScripts TeleprompterScript[]
+  streamerSettings  StreamerSettings?
+  moderatedMessages ChatModerationLog[]
+  moderatedStreams Moderator[]
+  streamTakeovers StreamTakeover[]
+}
+
+model Follow {
+  id          String   @id @default(uuid())
+  followerId  String
+  followingId String
+  follower    User     @relation("Following", fields: [followerId], references: [id])
+  following   User     @relation("Followers", fields: [followingId], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@unique([followerId, followingId])
+}
+
+model Stream {
+  id          String    @id @default(uuid())
+  title       String
+  description String?
+  thumbnail   String?
+  streamKey   String    @unique
+  isLive      Boolean   @default(false)
+  viewerCount Int       @default(0)
+  category    String?
+  tags        String[]
+  streamerId  String
+  streamer    User      @relation(fields: [streamerId], references: [id])
+  guests      Guest[]
+  messages    ChatMessage[]
+  analytics   StreamAnalytics[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  adminInterventions AdminIntervention[]
+  teleprompterProgress TeleprompterProgress[]
+  legalAnalyses     LegalAnalysis[]
+  moderationLogs    ChatModerationLog[]
+  moderators    Moderator[]
+  takeovers     StreamTakeover[]
+}
+
+model Guest {
+  id        String   @id @default(uuid())
+  streamId  String
+  userId    String
+  stream    Stream   @relation(fields: [streamId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+  joinedAt  DateTime @default(now())
+  leftAt    DateTime?
+}
+
+model ChatMessage {
+  id        String   @id @default(uuid())
+  content   String
+  streamId  String
+  userId    String
+  stream    Stream   @relation(fields: [streamId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model StreamAnalytics {
+  id              String   @id @default(uuid())
+  streamId        String
+  stream          Stream   @relation(fields: [streamId], references: [id])
+  peakViewers     Int
+  totalViewers    Int
+  chatMessages    Int
+  donations       Float
+  engagementScore Float
+  recommendations String[]
+  createdAt       DateTime @default(now())
+}
+
+model StarTransaction {
+  id        String   @id @default(uuid())
+  amount    Int
+  type      String   // "purchase", "donation", "reward"
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  streamId  String?
+  stream    Stream?  @relation(fields: [streamId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model Team {
+  id          String   @id @default(uuid())
+  name        String
+  logo        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  hostId      String
+  host        User     @relation("TeamHost", fields: [hostId], references: [id])
+  members     TeamMember[]
+  teamRooms   TeamRoom[]
+}
+
+model TeamMember {
+  id        String   @id @default(uuid())
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  joinedAt  DateTime @default(now())
+  status    String   @default("active") // active, inactive, banned
+  unique    TeamMemberUnique
+}
+
+model TeamRoom {
+  id          String   @id @default(uuid())
+  teamId      String
+  team        Team     @relation(fields: [teamId], references: [id])
+  startTime   DateTime @default(now())
+  endTime     DateTime
+  status      String   @default("active") // active, ended
+  participants TeamRoomParticipant[]
+}
+
+model TeamRoomParticipant {
+  id          String   @id @default(uuid())
+  roomId      String
+  room        TeamRoom @relation(fields: [roomId], references: [id])
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  joinedAt    DateTime @default(now())
+  leftAt      DateTime?
+}
+
+model AdminIntervention {
+  id          String   @id @default(uuid())
+  adminId     String
+  admin       User     @relation("AdminInterventions", fields: [adminId], references: [id])
+  streamId    String
+  stream      Stream   @relation(fields: [streamId], references: [id])
+  startTime   DateTime @default(now())
+  endTime     DateTime?
+  reason      String
+  status      String   @default("active") // active, ended
+}
+
+model TeamMemberUnique {
+  teamId String
+  userId String
+  @@unique([teamId, userId])
+}
+
+model TeleprompterScript {
+  id          String   @id @default(uuid())
+  title       String
+  content     String
+  streamerId  String
+  streamer    User     @relation(fields: [streamerId], references: [id])
+  sections    TeleprompterSection[]
+  progress    TeleprompterProgress[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model TeleprompterSection {
+  id          String   @id @default(uuid())
+  scriptId    String
+  script      TeleprompterScript @relation(fields: [scriptId], references: [id])
+  title       String
+  content     String
+  order       Int
+  keywords    String[]
+  progress    TeleprompterProgress[]
+}
+
+model TeleprompterProgress {
+  id          String   @id @default(uuid())
+  scriptId    String
+  script      TeleprompterScript @relation(fields: [scriptId], references: [id])
+  sectionId   String
+  section     TeleprompterSection @relation(fields: [sectionId], references: [id])
+  streamId    String
+  stream      Stream   @relation(fields: [streamId], references: [id])
+  completed   Boolean  @default(false)
+  confidence  Float    // KI-Konfidenz für die Abschnittserkennung
+  timestamp   DateTime @default(now())
+}
+
+model StreamerSettings {
+  id                String   @id @default(uuid())
+  streamerId        String   @unique
+  streamer          User     @relation(fields: [streamerId], references: [id])
+  legalAnalysis     Boolean  @default(true)
+  chatModeration    Boolean  @default(true)
+  sensitivityLevel  Int      @default(5) // 1-10
+  blockedWords      BlockedWord[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model BlockedWord {
+  id                String   @id @default(uuid())
+  word              String
+  streamerId        String
+  streamer          StreamerSettings @relation(fields: [streamerId], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model LegalAnalysis {
+  id                String   @id @default(uuid())
+  streamId          String
+  stream            Stream   @relation(fields: [streamId], references: [id])
+  paragraph         String   // Gesetzestext-Paragraph
+  description       String   // Beschreibung der rechtlichen Relevanz
+  severity          Int      // 1-5
+  timestamp         DateTime @default(now())
+  transcription     String   // Relevanter Teil der Transkription
+}
+
+model ChatModerationLog {
+  id                String   @id @default(uuid())
+  streamId          String
+  stream            Stream   @relation(fields: [streamId], references: [id])
+  message           String
+  userId            String
+  user              User     @relation(fields: [userId], references: [id])
+  reason            String   // Grund für die Moderation
+  action            String   // "block", "warn", "delete"
+  timestamp         DateTime @default(now())
+}
+
+model Moderator {
+  id            String    @id @default(uuid())
+  streamId      String
+  stream        Stream    @relation(fields: [streamId], references: [id])
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  rank          String    @default("silver") // "silver" oder "gold"
+  permissions   String[]  // Array von Berechtigungen
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  streamTakeovers StreamTakeover[]
+}
+
+model StreamTakeover {
+  id            String    @id @default(uuid())
+  streamId      String
+  stream        Stream    @relation(fields: [streamId], references: [id])
+  moderatorId   String
+  moderator     Moderator @relation(fields: [moderatorId], references: [id])
+  startTime     DateTime  @default(now())
+  endTime       DateTime?
+  status        String    @default("active") // "active", "completed", "cancelled"
+  reason        String?
+} 
